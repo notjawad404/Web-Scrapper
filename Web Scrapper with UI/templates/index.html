@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Web Crawler</title>
+    <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+</head>
+<body class="bg-gray-100 p-4">
+    <div class="max-w-lg mx-auto bg-white p-8 rounded shadow">
+        <h1 class="text-xl font-bold mb-4">Web Crawler</h1>
+        <form id="crawler-form">
+            <div class="mb-4">
+                <label class="block text-gray-700 text-sm font-bold mb-2" for="url">
+                    URL to crawl
+                </label>
+                <input class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline" id="url" type="text" placeholder="Enter URL">
+            </div>
+            <div class="mb-4">
+                <label class="block text-gray-700 text-sm font-bold mb-2" for="max-pages">
+                    Maximum number of pages to crawl
+                </label>
+                <input class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline" id="max-pages" type="number" placeholder="Enter maximum pages">
+            </div>
+            <button class="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded focus:outline-none focus:shadow-outline" type="submit">
+                Start Crawling
+            </button>
+        </form>
+        <div id="progress" class="mt-4 hidden">
+            <h2 class="text-lg font-bold mb-2">Crawling in progress...</h2>
+            <div id="status" class="text-gray-700"></div>
+            <div id="malicious-links" class="mt-4"></div>
+        </div>
+    </div>
+    
+    <script>
+        document.getElementById('crawler-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            document.getElementById('progress').classList.remove('hidden');
+            document.getElementById('malicious-links').innerHTML = "";
+            
+            const url = document.getElementById('url').value;
+            const maxPages = document.getElementById('max-pages').value;
+
+            const response = await fetch(`/crawl?url=${url}&max_pages=${maxPages}`);
+            const data = await response.json();
+            
+            document.getElementById('status').innerText = `Crawled ${data.crawled_pages} pages`;
+            if (data.malicious_links.length > 0) {
+                const maliciousLinksElement = document.getElementById('malicious-links');
+                const maliciousLinksList = document.createElement('ul');
+                maliciousLinksList.classList.add('list-disc', 'ml-4');
+                data.malicious_links.forEach(link => {
+                    const listItem = document.createElement('li');
+                    listItem.innerText = link;
+                    maliciousLinksList.appendChild(listItem);
+                });
+                maliciousLinksElement.appendChild(maliciousLinksList);
+            }
+        });
+    </script>
+</body>
+</html>
