@@ -1,8 +1,7 @@
-from flask import Flask, request, render_template, jsonify
+from flask import Flask, request, render_template, jsonify, Response
 import requests
 from bs4 import BeautifulSoup
 from urllib.parse import urljoin
-import os
 import json
 
 app = Flask(__name__)
@@ -13,7 +12,7 @@ def get_page_data(url):
     
     data = {
         "url": url,
-        "images": [image['src'] for image in soup.find_all('img')],
+        "images": [image['src'] if 'src' in image.attrs else '' for image in soup.find_all('img')],
         "paragraphs": [paragraph.text.strip() for paragraph in soup.find_all('p')],
         "tables": [],
         "lists": [],
@@ -21,7 +20,7 @@ def get_page_data(url):
         "options": [],
         "buttons": [button.text.strip() for button in soup.find_all('button')],
         "labels": [label.text.strip() for label in soup.find_all('label')],
-        "headings": {f"h{i}": [tag.text.strip() for tag in soup.find_all(f'h{i}')] for i in range(1, 6)},
+        "headings": {f"h{i}": [tag.text.strip() for tag in soup.find_all(f'h{i}')] for i in range(1, 7)},
         "meta_tags": [str(tag) for tag in soup.find_all('meta')],
         "links": []
     }
@@ -79,30 +78,18 @@ def check_malicious_links(url):
         pass
     return []
 
-@app.route('/')
-def index():
-    return render_template('index.html')
-
-@app.route('/crawl', methods=['GET'])
-def crawl():
-    start_url = request.args.get('url')
-    max_pages = int(request.args.get('max_pages'))
-    
-    # Create the directory if it doesn't exist
-    if not os.path.exists('web_data'):
-        os.makedirs('web_data')
-    
+def crawl(start_url, max_pages):
     visited_urls = set()
     queue = [start_url]
     count = 0
-    malicious_links = []
+    data = []
+    malicious_links = set()
 
     while queue and count < max_pages:
         url = queue.pop(0)
         if url not in visited_urls:
             page_data = get_page_data(url)
-            with open(f'web_data/page{count+1}.json', 'w', encoding='utf-8') as file:
-                json.dump(page_data, file, ensure_ascii=False, indent=4)
+            data.append(page_data)
             count += 1
             visited_urls.add(url)
             
@@ -115,12 +102,28 @@ def crawl():
                     queue.append(next_url)
 
     for url in visited_urls:
-        malicious_links.extend(check_malicious_links(url))
+        malicious_links.update(check_malicious_links(url))
     
-    return jsonify({
-        "crawled_pages": count,
-        "malicious_links": malicious_links
-    })
+    return {"data": data, "malicious_links": list(malicious_links)}
+
+@app.route('/')
+def index():
+    return render_template('index.html')
+
+@app.route('/crawl', methods=['GET'])
+def start_crawl():
+    start_url = request.args.get('url')
+    max_pages = int(request.args.get('max_pages'))
+    
+    def generate():
+        yield 'data: {"crawled_pages": 0}\n\n'
+        yield 'data: {"status": "Crawling in progress..."}\n\n'
+        count = 0
+        for page in crawl(start_url, max_pages)["data"]:
+            count += 1
+            yield f'data: {json.dumps({"crawled_pages": count, "page": page})}\n\n'
+
+    return Response(generate(), content_type='text/event-stream')
 
 if __name__ == '__main__':
     app.run(debug=True)
